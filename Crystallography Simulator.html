@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Crystallography Simulator</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js library for 3D graphics -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for camera manipulation -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- KaTeX for LaTeX rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css" xintegrity="sha384-Xi8rHCmBmhbuyyhbI88391ZKP2dmfnOl4rT9ZfRI7zTDRHt3MZh2dvGbcXoEthAB" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.js" xintegrity="sha384-X/XCfMm41VSsqRNwneAaCXZrsOys5LS4KAflYagOFksCX17/i+hEspDcTwA==" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js" xintegrity="sha384-+XBljXPPiv+OzfbB3cVmLHf4hdUFHlWNZN5spNQ7rmHTXpd7WvJum6fIACpNNfIR" crossorigin="anonymous"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Prevent scrollbars from appearing on the main body */
+        }
+        #simulation-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            display: block;
+        }
+        .info-panel {
+            scrollbar-width: thin;
+            scrollbar-color: #4f46e5 #e5e7eb;
+        }
+        .info-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+        .info-panel::-webkit-scrollbar-track {
+            background: #e5e7eb;
+            border-radius: 10px;
+        }
+        .info-panel::-webkit-scrollbar-thumb {
+            background-color: #4f46e5;
+            border-radius: 10px;
+            border: 2px solid #e5e7eb;
+        }
+        .label {
+            position: absolute;
+            color: #1f2937;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
+            pointer-events: none;
+            user-select: none;
+        }
+        /* Tab styling */
+        .tab-button {
+            transition: all 0.3s ease;
+        }
+        .tab-button.active {
+            color: #4f46e5;
+            border-bottom: 2px solid #4f46e5;
+            background-color: #eef2ff;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .katex { font-size: 1.1em; }
+
+    </style>
+</head>
+<body class="bg-gray-100 antialiased">
+
+    <div class="flex flex-col lg:flex-row h-screen">
+        <!-- Controls and Information Panel -->
+        <div class="w-full lg:w-96 bg-white shadow-lg p-4 flex flex-col z-10 overflow-y-auto info-panel">
+            <h1 class="text-2xl font-bold text-gray-800 mb-4 px-2">Crystallography Simulator</h1>
+
+            <!-- Tab Navigation -->
+            <div class="border-b border-gray-200 mb-4">
+                <nav class="-mb-px flex space-x-1" aria-label="Tabs">
+                    <button class="tab-button active whitespace-nowrap py-2 px-2 font-medium text-xs text-gray-500 hover:text-gray-700" data-tab="miller">Miller Indices</button>
+                    <button class="tab-button whitespace-nowrap py-2 px-2 font-medium text-xs text-gray-500 hover:text-gray-700" data-tab="structures">Structures</button>
+                    <button class="tab-button whitespace-nowrap py-2 px-2 font-medium text-xs text-gray-500 hover:text-gray-700" data-tab="systems">7 Systems</button>
+                    <button class="tab-button whitespace-nowrap py-2 px-2 font-medium text-xs text-gray-500 hover:text-gray-700" data-tab="defects">Defects</button>
+                    <button class="tab-button whitespace-nowrap py-2 px-2 font-medium text-xs text-gray-500 hover:text-gray-700" data-tab="calculator">Calculators</button>
+                </nav>
+            </div>
+
+            <div class="flex-grow px-2">
+                <!-- Miller Indices Tab Content -->
+                <div id="miller-tab" class="tab-content active">
+                    <p class="text-gray-600 mb-4 text-sm">Visualize crystallographic planes (hkl) and directions [uvw].</p>
+                    <div class="mode-toggle flex items-center justify-center space-x-2 mb-6 bg-gray-100 p-1 rounded-lg">
+                        <div class="flex-1 text-center">
+                            <input type="radio" id="mode-plane" name="mode" value="plane" checked class="hidden">
+                            <label for="mode-plane" class="cursor-pointer block w-full py-2 px-1 rounded-md text-sm transition-colors duration-300">Plane (hkl)</label>
+                        </div>
+                        <div class="flex-1 text-center">
+                            <input type="radio" id="mode-direction" name="mode" value="direction" class="hidden">
+                            <label for="mode-direction" class="cursor-pointer block w-full py-2 px-1 rounded-md text-sm transition-colors duration-300">Direction [uvw]</label>
+                        </div>
+                    </div>
+                    <style>
+                        .mode-toggle input[type="radio"]:checked + label { background-color: #4f46e5; color: white; }
+                    </style>
+
+                    <div class="space-y-4 mb-6">
+                        <div>
+                             <label for="h-index" id="h-label" class="block text-sm font-medium text-gray-700">h Index (Out/In - Blue)</label>
+                             <input type="text" id="h-index" value="1" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                         </div>
+                         <div>
+                             <label for="k-index" id="k-label" class="block text-sm font-medium text-gray-700">k Index (Right/Left - Red)</label>
+                             <input type="text" id="k-index" value="1" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                         </div>
+                         <div>
+                             <label for="l-index" id="l-label" class="block text-sm font-medium text-gray-700">l Index (Up/Down - Green)</label>
+                             <input type="text" id="l-index" value="1" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                         </div>
+                    </div>
+                    <p class="text-xs text-gray-500 -mt-4 mb-6">Tip: For negative values, use `-1`, `1¯`, or `1bar`.</p>
+                    <div id="message-box" class="mt-4 text-sm text-center font-medium p-3 rounded-lg"></div>
+                    <div id="plane-info-panel" class="mt-6 border-t border-gray-200 pt-4">
+                         <h2 class="text-lg font-semibold text-gray-800 mb-2">Plane Information</h2>
+                         <div class="text-sm space-y-2 text-gray-600">
+                             <p><strong>Intercepts:</strong> <span id="intercepts-info">(1a, 1b, 1c)</span></p>
+                             <p class="text-xs italic">Intercepts are calculated as a/h, b/k, c/l. An index of 0 means the plane is parallel to that axis (intercept at ∞).</p>
+                         </div>
+                     </div>
+                    <div id="direction-info-panel" class="mt-6 border-t border-gray-200 pt-4 hidden">
+                        <h2 class="text-lg font-semibold text-gray-800 mb-2">Direction Information</h2>
+                        <div class="text-sm space-y-2 text-gray-600">
+                            <p><strong>Vector:</strong> <span id="vector-info">[1, 1, 1]</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Crystal Structures Tab Content -->
+                <div id="structures-tab" class="tab-content">
+                    <p class="text-gray-600 mb-4 text-sm">View common metallic crystal structures.</p>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="structure-select" class="block text-sm font-medium text-gray-700">Select Structure</label>
+                            <select id="structure-select" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                <option value="sc">Simple Cubic (SC)</option>
+                                <option value="bcc">Body-Centered Cubic (BCC)</option>
+                                <option value="fcc">Face-Centered Cubic (FCC)</option>
+                                <option value="hcp">Hexagonal Close-Packed (HCP)</option>
+                            </select>
+                        </div>
+                        <div id="structure-info" class="mt-4 border-t border-gray-200 pt-4 text-sm text-gray-700 space-y-2">
+                            <!-- Info will be populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Crystal Systems Tab Content -->
+                <div id="systems-tab" class="tab-content">
+                    <p class="text-gray-600 mb-4 text-sm">Visualize the seven crystal systems based on their lattice parameters.</p>
+                     <div class="space-y-4">
+                        <div>
+                            <label for="system-select" class="block text-sm font-medium text-gray-700">Select System</label>
+                            <select id="system-select" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                <option value="cubic">Cubic</option>
+                                <option value="tetragonal">Tetragonal</option>
+                                <option value="orthorhombic">Orthorhombic</option>
+                                <option value="hexagonal">Hexagonal</option>
+                                <option value="rhombohedral">Rhombohedral</option>
+                                <option value="monoclinic">Monoclinic</option>
+                                <option value="triclinic">Triclinic</option>
+                            </select>
+                        </div>
+                        <div id="system-info" class="mt-4 border-t border-gray-200 pt-4 text-sm text-gray-700 space-y-2">
+                            <!-- Info will be populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Defects Tab Content -->
+                <div id="defects-tab" class="tab-content">
+                    <p class="text-gray-600 mb-4 text-sm">Visualize imperfections in a crystal lattice.</p>
+                     <div class="space-y-4">
+                        <div>
+                            <label for="defect-select" class="block text-sm font-medium text-gray-700">Select Defect Type</label>
+                            <select id="defect-select" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                <option value="perfect">Perfect BCC Crystal</option>
+                                <option value="vacancy">Vacancy (Void)</option>
+                                <option value="interstitial">Interstitial</option>
+                            </select>
+                        </div>
+                        <div id="defect-info" class="mt-4 border-t border-gray-200 pt-4 text-sm text-gray-700 space-y-2">
+                            <!-- Info will be populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calculator Tab Content -->
+                <div id="calculator-tab" class="tab-content">
+                    <h2 class="text-lg font-semibold text-gray-800 mb-2">Planar Density & APF</h2>
+                    <p class="text-gray-600 mb-4 text-sm">Calculate properties for a plane in a cubic structure and visualize it.</p>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="pd-structure" class="block text-sm font-medium text-gray-700">Crystal Structure</label>
+                            <select id="pd-structure" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                <option value="sc">Simple Cubic (SC)</option>
+                                <option value="bcc">Body-Centered Cubic (BCC)</option>
+                                <option value="fcc">Face-Centered Cubic (FCC)</option>
+                            </select>
+                        </div>
+                         <div>
+                            <label for="pd-plane" class="block text-sm font-medium text-gray-700">Plane (hkl)</label>
+                            <select id="pd-plane" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                                <option value="100">(100)</option>
+                                <option value="110">(110)</option>
+                                <option value="111">(111)</option>
+                            </select>
+                        </div>
+                        <button id="calculate-pd" class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Calculate & Visualize</button>
+                    </div>
+                    <div id="pd-results" class="mt-4 border-t border-gray-200 pt-4 text-sm text-gray-700 space-y-3">
+                        <!-- Results will be populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interaction Instructions -->
+            <div id="interaction-guide" class="mt-6 border-t border-gray-200 pt-4 px-2">
+                <h2 class="text-lg font-semibold text-gray-800 mb-2">How to Interact</h2>
+                <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
+                    <li><strong>Rotate:</strong> Click and drag with the left mouse button.</li>
+                    <li><strong>Zoom:</strong> Scroll with the mouse wheel.</li>
+                    <li><strong>Pan:</strong> Click and drag with the right mouse button.</li>
+                </ul>
+            </div>
+
+            <div class="text-center text-xs text-gray-400 mt-6 px-2">
+                <p>Developed by Ahmad Taki Tajwar</p>
+            </div>
+        </div>
+
+        <!-- 3D Simulation Canvas -->
+        <div id="simulation-container" class="flex-grow bg-gray-200"></div>
+    </div>
+
+    <script type="module">
+        // --- Global Variables ---
+        let scene, camera, renderer, controls, activeGroup;
+        let labels = [];
+        let currentMode = 'plane';
+        let currentTab = 'miller';
+        const container = document.getElementById('simulation-container');
+
+        // --- Core Functions ---
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf0f2f5);
+            activeGroup = new THREE.Group();
+            scene.add(activeGroup);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(3, 3, 4);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            directionalLight.position.set(5, 10, 7.5);
+            scene.add(directionalLight);
+
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            setupEventListeners();
+            updateScene();
+            animate();
+        }
+
+        function clearScene() {
+            if (activeGroup) {
+                while (activeGroup.children.length > 0) {
+                    const obj = activeGroup.children[0];
+                    activeGroup.remove(obj);
+                    if(obj.geometry) obj.geometry.dispose();
+                    if(obj.material) {
+                        if (Array.isArray(obj.material)) {
+                            obj.material.forEach(m => m.dispose());
+                        } else {
+                            obj.material.dispose();
+                        }
+                    }
+                }
+            }
+            labels.forEach(l => l.div.remove());
+            labels = [];
+        }
+
+        function updateScene() {
+            clearScene();
+            document.getElementById('interaction-guide').classList.remove('hidden');
+
+            switch(currentTab) {
+                case 'miller':
+                    drawMillerScene();
+                    break;
+                case 'structures':
+                    drawStructureScene();
+                    break;
+                case 'systems':
+                    drawCrystalSystemScene();
+                    break;
+                case 'defects':
+                    drawDefectScene();
+                    break;
+                case 'calculator':
+                    drawUnitCell();
+                    controls.target.set(0.5, 0.5, 0.5);
+                    if (!document.getElementById('pd-results').innerHTML.trim()) {
+                         document.getElementById('pd-results').innerHTML = `<p class="text-gray-500">Select a structure and plane, then click 'Calculate & Visualize'.</p>`;
+                    }
+                    break;
+            }
+            renderLaTeX();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            updateLabels();
+        }
+
+        function onWindowResize() {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        // --- Scene Drawing Logic ---
+        function drawMillerScene() {
+            drawUnitCell();
+            drawAxes();
+            updateVisualization();
+            updateUIForMode();
+            controls.target.set(0.5, 0.5, 0.5);
+        }
+
+        function drawStructureScene() {
+            const structureType = document.getElementById('structure-select').value;
+            const atomRadius = 0.3;
+            const cornerColor = 0x4f46e5; // Indigo
+            const centerColor = 0xdb2777; // Pink
+            const faceColor = 0x16a34a;   // Green
+
+            const atomMaterial = (color) => new THREE.MeshPhongMaterial({ color: color, shininess: 80 });
+            const atomGeometry = new THREE.SphereGeometry(atomRadius, 32, 32);
+
+            const addAtom = (pos, color) => {
+                const atom = new THREE.Mesh(atomGeometry, atomMaterial(color));
+                atom.position.set(pos[0], pos[1], pos[2]);
+                activeGroup.add(atom);
+            };
+
+            if (structureType === 'hcp') {
+                drawHCPCell();
+                const a = 1, c = 1.633;
+                // 12 corners
+                for (let i = 0; i < 6; i++) {
+                    addAtom([a * Math.cos(i * Math.PI / 3), a * Math.sin(i * Math.PI / 3), 0], cornerColor);
+                    addAtom([a * Math.cos(i * Math.PI / 3), a * Math.sin(i * Math.PI / 3), c], cornerColor);
+                }
+                // 2 face centers
+                addAtom([0, 0, 0], faceColor);
+                addAtom([0, 0, c], faceColor);
+                // 3 internal atoms
+                addAtom([a/2, -a*Math.sqrt(3)/6, c/2], centerColor);
+                addAtom([-a/2, -a*Math.sqrt(3)/6, c/2], centerColor);
+                addAtom([0, a*Math.sqrt(3)/3, c/2], centerColor);
+
+                controls.target.set(0, 0, c/2);
+            } else {
+                drawUnitCell();
+                const corners = [ [0,0,0], [1,0,0], [1,1,0], [0,1,0], [0,0,1], [1,0,1], [1,1,1], [0,1,1] ];
+                corners.forEach(p => addAtom(p, cornerColor));
+                if (structureType === 'bcc') {
+                    addAtom([0.5, 0.5, 0.5], centerColor);
+                } else if (structureType === 'fcc') {
+                    const faceCenters = [ [0.5,0.5,1], [0.5,0.5,0], [1,0.5,0.5], [0,0.5,0.5], [0.5,1,0.5], [0.5,0,0.5] ];
+                    faceCenters.forEach(p => addAtom(p, faceColor));
+                }
+                controls.target.set(0.5, 0.5, 0.5);
+            }
+            updateStructureInfo();
+        }
+
+        function drawCrystalSystemScene() {
+            const system = document.getElementById('system-select').value;
+            const systems = {
+                cubic:        { a: 1, b: 1, c: 1, alpha: 90, beta: 90, gamma: 90 },
+                tetragonal:   { a: 1, b: 1, c: 1.5, alpha: 90, beta: 90, gamma: 90 },
+                orthorhombic: { a: 1, b: 1.5, c: 0.8, alpha: 90, beta: 90, gamma: 90 },
+                hexagonal:    { a: 1, b: 1, c: 1.5, alpha: 90, beta: 90, gamma: 120 },
+                rhombohedral: { a: 1, b: 1, c: 1, alpha: 75, beta: 75, gamma: 75 },
+                monoclinic:   { a: 1, b: 1.5, c: 0.8, alpha: 90, beta: 110, gamma: 90 },
+                triclinic:    { a: 1, b: 1.5, c: 0.8, alpha: 70, beta: 110, gamma: 95 },
+            };
+            const params = systems[system];
+
+            if (system === 'hexagonal') {
+                const { a, c } = params;
+                const material = new THREE.LineBasicMaterial({ color: 0x334155, linewidth: 2 });
+                const points = [];
+                for (let i = 0; i < 6; i++) {
+                    let angle1 = i * Math.PI / 3;
+                    let angle2 = (i + 1) * Math.PI / 3;
+                    // Bottom hexagon
+                    points.push(new THREE.Vector3(a * Math.cos(angle1), a * Math.sin(angle1), 0));
+                    points.push(new THREE.Vector3(a * Math.cos(angle2), a * Math.sin(angle2), 0));
+                    // Top hexagon
+                    points.push(new THREE.Vector3(a * Math.cos(angle1), a * Math.sin(angle1), c));
+                    points.push(new THREE.Vector3(a * Math.cos(angle2), a * Math.sin(angle2), c));
+                    // Vertical lines
+                    points.push(new THREE.Vector3(a * Math.cos(angle1), a * Math.sin(angle1), 0));
+                    points.push(new THREE.Vector3(a * Math.cos(angle1), a * Math.sin(angle1), c));
+                }
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.LineSegments(geometry, material);
+                activeGroup.add(line);
+                controls.target.set(0, 0, c / 2);
+            } else {
+                drawGenericCell(params);
+                controls.target.set(0, 0, 0);
+            }
+
+            updateSystemInfo(system, params);
+        };
+
+        function drawDefectScene() {
+            const defectType = document.getElementById('defect-select').value;
+            const atomRadius = 0.35;
+            const atomColor = 0x4f46e5;
+            const interstitialColor = 0xdb2777;
+
+            const atomMaterial = (color) => new THREE.MeshPhongMaterial({ color: color, shininess: 80 });
+            const atomGeometry = new THREE.SphereGeometry(atomRadius, 32, 32);
+            const interstitialGeom = new THREE.SphereGeometry(atomRadius * 0.6, 32, 32);
+
+            const addAtom = (pos, mat) => {
+                const atom = new THREE.Mesh(mat === 'interstitial' ? interstitialGeom : atomGeometry, atomMaterial(mat === 'interstitial' ? interstitialColor : atomColor));
+                atom.position.set(pos[0], pos[1], pos[2]);
+                activeGroup.add(atom);
+            };
+
+            // Draw a 3x3x3 block of unit cells for context
+            const size = 3;
+            for (let i = 0; i < size; i++) {
+                for (let j = 0; j < size; j++) {
+                    for (let k = 0; k < size; k++) {
+                        // BCC lattice positions
+                        addAtom([i, j, k], 'normal'); 
+                        if (i < size-1 && j < size-1 && k < size-1) {
+                           addAtom([i + 0.5, j + 0.5, k + 0.5], 'normal');
+                        }
+                    }
+                }
+            }
+            
+            // Modify the central part of the block for defects
+            if (defectType === 'vacancy') {
+                const centralAtom = activeGroup.children.find(c => c.position.equals(new THREE.Vector3(1.5, 1.5, 1.5)));
+                if (centralAtom) activeGroup.remove(centralAtom);
+            } else if (defectType === 'interstitial') {
+                // Place at an octahedral interstitial site: a face center of a conventional cell
+                addAtom([1.5, 1.0, 1.5], 'interstitial');
+            }
+
+            updateDefectInfo(defectType);
+            controls.target.set(1.5, 1.5, 1.5);
+        }
+
+        function drawUnitCell() {
+            drawGenericCell({a:1, b:1, c:1, alpha:90, beta:90, gamma:90});
+        }
+
+        function drawHCPCell() {
+            const c = 1.633; const a = 1;
+            const material = new THREE.LineBasicMaterial({ color: 0x334155, linewidth: 2 });
+            const points = [];
+            for (let i = 0; i < 6; i++) {
+                let angle1 = i * Math.PI / 3;
+                let angle2 = (i + 1) * Math.PI / 3;
+                // Bottom hexagon
+                points.push(new THREE.Vector3(a * Math.cos(angle1), a * Math.sin(angle1), 0));
+                points.push(new THREE.Vector3(a * Math.cos(angle2), a * Math.sin(angle2), 0));
+                // Top hexagon
+                points.push(new THREE.Vector3(a * Math.cos(angle1), a * Math.sin(angle1), c));
+                points.push(new THREE.Vector3(a * Math.cos(angle2), a * Math.sin(angle2), c));
+                // Vertical lines
+                points.push(new THREE.Vector3(a * Math.cos(angle1), a * Math.sin(angle1), 0));
+                points.push(new THREE.Vector3(a * Math.cos(angle1), a * Math.sin(angle1), c));
+            }
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.LineSegments(geometry, material);
+            activeGroup.add(line);
+        }
+
+        function drawGenericCell(p) {
+            const {a, b, c, alpha, beta, gamma} = p;
+            const material = new THREE.LineBasicMaterial({ color: 0x334155, linewidth: 2 });
+            
+            const alphaR = THREE.MathUtils.degToRad(alpha);
+            const betaR = THREE.MathUtils.degToRad(beta);
+            const gammaR = THREE.MathUtils.degToRad(gamma);
+
+            const vA = new THREE.Vector3(a, 0, 0);
+            const vB = new THREE.Vector3(b * Math.cos(gammaR), b * Math.sin(gammaR), 0);
+            const vC_x = c * Math.cos(betaR);
+            const vC_y = c * (Math.cos(alphaR) - Math.cos(betaR) * Math.cos(gammaR)) / Math.sin(gammaR);
+            const vC_z = Math.sqrt(Math.abs(c*c - vC_x*vC_x - vC_y*vC_y));
+            const vC = new THREE.Vector3(vC_x, vC_y, vC_z);
+            
+            const p000 = new THREE.Vector3(0,0,0);
+            const p100 = vA.clone();
+            const p010 = vB.clone();
+            const p001 = vC.clone();
+            const p110 = new THREE.Vector3().addVectors(vA, vB);
+            const p101 = new THREE.Vector3().addVectors(vA, vC);
+            const p011 = new THREE.Vector3().addVectors(vB, vC);
+            const p111 = new THREE.Vector3().addVectors(vA, vB).add(vC);
+
+            const points = [
+                p000, p100, p000, p010, p000, p001,
+                p100, p110, p100, p101, p010, p110,
+                p010, p011, p001, p101, p001, p011,
+                p110, p111, p101, p111, p011, p111
+            ];
+            
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.LineSegments(geometry, material);
+            activeGroup.add(line);
+        }
+
+        // --- Info & UI Updaters ---
+        function updateStructureInfo() {
+            const type = document.getElementById('structure-select').value;
+            const infoDiv = document.getElementById('structure-info');
+            const data = {
+                sc: { name: 'Simple Cubic', atoms: 1, cn: 6, apf: '0.52', relation: 'a = 2R' },
+                bcc: { name: 'Body-Centered Cubic', atoms: 2, cn: 8, apf: '0.68', relation: 'a\\sqrt{3} = 4R' },
+                fcc: { name: 'Face-Centered Cubic', atoms: 4, cn: 12, apf: '0.74', relation: 'a\\sqrt{2} = 4R' },
+                hcp: { name: 'Hexagonal Close-Packed', atoms: 6, cn: 12, apf: '0.74', relation: 'a = 2R, c/a \\approx 1.633' }
+            };
+            const info = data[type];
+            infoDiv.innerHTML = `
+                <p><strong>Atoms/Unit Cell:</strong> ${info.atoms}</p>
+                <p><strong>Coordination Number:</strong> ${info.cn}</p>
+                <p><strong>Atomic Packing Factor (APF):</strong> ${info.apf}</p>
+                <p><strong>Lattice-Radius Relation:</strong> $${info.relation}$</p>
+                <p class="text-xs italic mt-2">APF is the fraction of volume in a crystal structure that is occupied by constituent particles.</p>
+                <p class="text-xs italic">APF = $\\frac{\\text{Volume of atoms in unit cell}}{\\text{Volume of unit cell}}$</p>
+            `;
+            renderLaTeX();
+        }
+
+        function updateSystemInfo(system, params) {
+            const infoDiv = document.getElementById('system-info');
+            const descriptions = {
+                cubic:        'All axes are equal length and all angles are 90°. The most symmetric system.',
+                tetragonal:   'Two axes are equal, one is different. All angles are 90°. Like a stretched cube.',
+                orthorhombic: 'All axes are different lengths, but all angles are 90°. A rectangular box.',
+                hexagonal:    'Two axes are equal at 120° to each other, the third is different and at 90° to them.',
+                rhombohedral: 'All axes are equal length, and all angles between them are equal but not 90°. A skewed cube.',
+                monoclinic:   'All axes are different lengths. Two angles are 90°, one is not. Like a tilted box.',
+                triclinic:    'All axes and all angles are different. The least symmetric system.',
+            };
+            infoDiv.innerHTML = `
+                <h3 class="font-semibold text-gray-800 capitalize">${system}</h3>
+                <p><strong>Lattice Parameters:</strong></p>
+                <ul class="list-disc list-inside ml-2">
+                    <li>$a = ${params.a}, b = ${params.b}, c = ${params.c}$</li>
+                    <li>$\\alpha = ${params.alpha}^\\circ, \\beta = ${params.beta}^\\circ, \\gamma = ${params.gamma}^\\circ$</li>
+                </ul>
+                <p class="text-xs italic mt-2">${descriptions[system]}</p>
+            `;
+            renderLaTeX();
+        }
+
+        function updateDefectInfo(defectType) {
+            const infoDiv = document.getElementById('defect-info');
+            const descriptions = {
+                perfect: 'A theoretically perfect crystal lattice with no defects. Used as a reference.',
+                vacancy: 'A <strong>point defect</strong> where an atom is missing from one of the lattice sites. Also known as a void.',
+                interstitial: 'A <strong>point defect</strong> where an atom occupies a site in the crystal structure at which there is usually not an atom. It is often a smaller impurity atom.'
+            };
+            infoDiv.innerHTML = `<p>${descriptions[defectType]}</p>`;
+        }
+        
+        function calculatePlanarDensity() {
+            const structure = document.getElementById('pd-structure').value;
+            const plane = document.getElementById('pd-plane').value;
+            const resultsDiv = document.getElementById('pd-results');
+
+            const data = {
+                sc: { '100': { atoms: 1, area: 'a^2' }, '110': { atoms: 1, area: 'a^2\\sqrt{2}' }, '111': { atoms: 0.5, area: '\\frac{a^2\\sqrt{3}}{2}' } },
+                bcc: { '100': { atoms: 1, area: 'a^2' }, '110': { atoms: 2, area: 'a^2\\sqrt{2}' }, '111': { atoms: 0.5, area: '\\frac{a^2\\sqrt{3}}{2}' } },
+                fcc: { '100': { atoms: 2, area: 'a^2' }, '110': { atoms: 2, area: 'a^2\\sqrt{2}' }, '111': { atoms: 2, area: '\\frac{a^2\\sqrt{3}}{2}' } }
+            };
+
+            const result = data[structure][plane];
+            resultsDiv.innerHTML = `
+                <h3 class="font-semibold text-gray-800">Results for (${plane}) in ${structure.toUpperCase()}:</h3>
+                <p><strong>Equivalent Atoms on Plane:</strong> ${result.atoms}</p>
+                <p><strong>Area of Plane Section:</strong> $${result.area}$</p>
+                <p class="font-bold"><strong>Planar Density (PD):</strong>
+                    <span class="text-indigo-600">$\\text{PD}_{(${plane})} = \\frac{\\text{${result.atoms}}}{${result.area}}$</span>
+                </p>
+                <p class="text-xs italic mt-2">Planar Density is the number of atoms per unit area on a crystallographic plane.</p>
+            `;
+            renderLaTeX();
+            visualizePlanarDensity(structure, plane);
+        }
+
+        function visualizePlanarDensity(structure, plane) {
+            clearScene();
+            drawUnitCell();
+            
+            const h = parseInt(plane[0]), k = parseInt(plane[1]), l = parseInt(plane[2]);
+            visualizeClippedPlane(h, k, l, true);
+
+            // Define all potential atom positions for each structure
+            const atomPositions = {
+                sc: [ [0,0,0], [1,0,0], [0,1,0], [0,0,1], [1,1,0], [1,0,1], [0,1,1], [1,1,1] ],
+                bcc: [
+                    [0,0,0], [1,0,0], [0,1,0], [0,0,1], [1,1,0], [1,0,1], [0,1,1], [1,1,1], // corners
+                    [0.5, 0.5, 0.5] // body center
+                ],
+                fcc: [
+                    [0,0,0], [1,0,0], [0,1,0], [0,0,1], [1,1,0], [1,0,1], [0,1,1], [1,1,1], // corners
+                    [0.5,0.5,0], [0.5,0.5,1], [0.5,0,0.5], [0.5,1,0.5], [0,0.5,0.5], [1,0.5,0.5] // face centers
+                ]
+            };
+            
+            const atomRadius = 0.15;
+            const atomGeometry = new THREE.SphereGeometry(atomRadius, 32, 32);
+            const atomMaterial = new THREE.MeshPhongMaterial({ color: 0xdb2777 });
+            const epsilon = 1e-4;
+
+            const potentialAtoms = atomPositions[structure];
+            potentialAtoms.forEach(pos => {
+                // Check if atom at pos [x,y,z] is on the plane kx + ly + hz = 1. NOTE: Axis convention mismatch here.
+                // The plane is kx+ly+hz=1. The positions are (x,y,z). So the check is correct.
+                if (Math.abs(k * pos[0] + l * pos[1] + h * pos[2] - 1) < epsilon) {
+                    const atom = new THREE.Mesh(atomGeometry, atomMaterial);
+                    atom.position.set(pos[0], pos[1], pos[2]);
+                    activeGroup.add(atom);
+                }
+            });
+
+            controls.target.set(0.5, 0.5, 0.5);
+        }
+
+        // --- Event Handlers & Helpers ---
+        function setupEventListeners() {
+            // Main Tabs
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    currentTab = button.dataset.tab;
+                    document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                    button.classList.add('active');
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    document.getElementById(`${currentTab}-tab`).classList.add('active');
+                    updateScene();
+                });
+            });
+
+            // Miller Mode Toggle
+            document.querySelectorAll('input[name="mode"]').forEach(radio => {
+                radio.addEventListener('change', (event) => {
+                    currentMode = event.target.value;
+                    updateUIForMode();
+                    updateVisualization();
+                });
+            });
+
+            // Miller Inputs
+            ['h-index', 'k-index', 'l-index'].forEach(id => {
+                document.getElementById(id).addEventListener('input', updateVisualization);
+            });
+            
+            // Selects
+            document.getElementById('structure-select').addEventListener('change', updateScene);
+            document.getElementById('system-select').addEventListener('change', updateScene);
+            document.getElementById('defect-select').addEventListener('change', updateScene);
+
+            // PD Calculator
+            document.getElementById('pd-structure').addEventListener('change', () => { document.getElementById('pd-results').innerHTML = ''; clearScene(); drawUnitCell(); });
+            document.getElementById('pd-plane').addEventListener('change', () => { document.getElementById('pd-results').innerHTML = ''; clearScene(); drawUnitCell(); });
+            document.getElementById('calculate-pd').addEventListener('click', calculatePlanarDensity);
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+        
+        function renderLaTeX() {
+            if (window.renderMathInElement) {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                    ]
+                });
+            }
+        }
+
+        // --- Miller/Vector Functions (Replaced/Integrated) ---
+
+        // This is the advanced clipping plane visualization, renamed and kept for the calculator
+        function visualizeClippedPlane(h, k, l, isCalculator) {
+            if (isNaN(h) || isNaN(k) || isNaN(l)) { if(!isCalculator) showMessage('Invalid integer values.', 'error'); return; }
+            if (h === 0 && k === 0 && l === 0) { if(!isCalculator) showMessage('Miller indices (h, k, l) cannot all be zero.', 'error'); if(!isCalculator) updateInterceptsInfo('Invalid'); return; }
+            
+            // Note: This visualization uses the convention that the plane is defined by kx+ly+hz=1
+            const planeNormal = new THREE.Vector3(k, l, h);
+            const planeConstant = 1;
+            const plane = new THREE.Plane(planeNormal, -planeConstant);
+            
+            const points = [];
+            const edges = [
+                [new THREE.Vector3(0,0,0), new THREE.Vector3(1,0,0)], [new THREE.Vector3(1,0,0), new THREE.Vector3(1,1,0)],
+                [new THREE.Vector3(1,1,0), new THREE.Vector3(0,1,0)], [new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0)],
+                [new THREE.Vector3(0,0,1), new THREE.Vector3(1,0,1)], [new THREE.Vector3(1,0,1), new THREE.Vector3(1,1,1)],
+                [new THREE.Vector3(1,1,1), new THREE.Vector3(0,1,1)], [new THREE.Vector3(0,1,1), new THREE.Vector3(0,0,1)],
+                [new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,1)], [new THREE.Vector3(1,0,0), new THREE.Vector3(1,0,1)],
+                [new THREE.Vector3(1,1,0), new THREE.Vector3(1,1,1)], [new THREE.Vector3(0,1,0), new THREE.Vector3(0,1,1)],
+            ];
+
+            edges.forEach(edge => {
+                const line = new THREE.Line3(edge[0], edge[1]);
+                const intersectPoint = new THREE.Vector3();
+                if (plane.intersectLine(line, intersectPoint)) {
+                    if (intersectPoint.distanceTo(edge[0]) + intersectPoint.distanceTo(edge[1]) - edge[0].distanceTo(edge[1]) < 0.001) {
+                         if (!points.some(p => p.distanceTo(intersectPoint) < 0.001)) {
+                            points.push(intersectPoint);
+                        }
+                    }
+                }
+            });
+            
+            if (points.length < 3) {
+                if(!isCalculator) showMessage('Plane does not intersect the unit cell in a visible way.', 'warning');
+                return;
+            }
+
+            const center = points.reduce((acc, p) => acc.add(p), new THREE.Vector3()).divideScalar(points.length);
+            const refVec = new THREE.Vector3().subVectors(points[0], center).normalize();
+            points.sort((a, b) => {
+                let vecA = new THREE.Vector3().subVectors(a, center);
+                let vecB = new THREE.Vector3().subVectors(b, center);
+                let angleA = refVec.angleTo(vecA);
+                let angleB = refVec.angleTo(vecB);
+                if (new THREE.Vector3().crossVectors(refVec, vecA).dot(planeNormal) < 0) angleA = 2 * Math.PI - angleA;
+                if (new THREE.Vector3().crossVectors(refVec, vecB).dot(planeNormal) < 0) angleB = 2 * Math.PI - angleB;
+                return angleA - angleB;
+            });
+
+            const planeGeom = new THREE.BufferGeometry().setFromPoints(points);
+            const indices = [];
+            for (let i = 1; i < points.length - 1; i++) {
+                indices.push(0, i, i + 1);
+            }
+            planeGeom.setIndex(indices);
+            planeGeom.computeVertexNormals();
+
+            const planeMaterial = new THREE.MeshBasicMaterial({ color: 0xfb923c, side: THREE.DoubleSide, transparent: true, opacity: 0.6 });
+            const planeMesh = new THREE.Mesh(planeGeom, planeMaterial);
+            planeMesh.name = "millerObject"; // Still use same name to be overwritten by new inputs
+            activeGroup.add(planeMesh);
+        }
+
+        // --- Miller Indices Visualization Functions ---
+        function drawAxes() {
+            const origin = new THREE.Vector3(0, 0, 0); const axisLength = 1.5;
+            const arrowHelperK = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), origin, axisLength, 0xff5733, 0.1, 0.07);
+            const arrowHelperL = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), origin, axisLength, 0x33ff57, 0.1, 0.07);
+            const arrowHelperH = new THREE.ArrowHelper(new THREE.Vector3(0,0,1), origin, axisLength, 0x3357ff, 0.1, 0.07);
+            activeGroup.add(arrowHelperK, arrowHelperL, arrowHelperH);
+            const labelOffset = axisLength + 0.2;
+            createAxisLabel('+k (x)', labelOffset, 0, 0); 
+            createAxisLabel('+l (y)', 0, labelOffset, 0); 
+            createAxisLabel('+h (z)', 0, 0, labelOffset);
+        }
+
+        function updateVisualization() {
+            const millerObject = activeGroup.getObjectByName("millerObject");
+            if (millerObject) {
+                activeGroup.remove(millerObject);
+                if(millerObject.geometry) millerObject.geometry.dispose();
+                if(millerObject.material) millerObject.material.dispose();
+            }
+            if (currentMode === 'plane') visualizePlane(); else visualizeDirection();
+        }
+
+        function visualizePlane() {
+            const h = parseMillerInput(document.getElementById('h-index').value); 
+            const k = parseMillerInput(document.getElementById('k-index').value); 
+            const l = parseMillerInput(document.getElementById('l-index').value);
+            if (isNaN(h) || isNaN(k) || isNaN(l)) { showMessage('Invalid integer values.', 'error'); return; }
+            if (h === 0 && k === 0 && l === 0) { showMessage('Miller indices (h, k, l) cannot all be zero.', 'error'); updateInterceptsInfo('Invalid'); return; }
+            showMessage('Plane: (' + h + ' ' + k + ' ' + l + ')', 'info');
+            // NOTE: The axis mapping for this visualization is h->z, k->x, l->y.
+            const interceptX = k !== 0 ? 1 / k : Infinity; 
+            const interceptY = l !== 0 ? 1 / l : Infinity; 
+            const interceptZ = h !== 0 ? 1 / h : Infinity;
+            updateInterceptsInfo(`(${formatIntercept(1/h)}, ${formatIntercept(1/k)}, ${formatIntercept(1/l)})`);
+            const vertices = []; const largeVal = 10;
+            if (interceptX !== Infinity && interceptY !== Infinity && interceptZ !== Infinity) { vertices.push(new THREE.Vector3(interceptX, 0, 0), new THREE.Vector3(0, interceptY, 0), new THREE.Vector3(0, 0, interceptZ)); }
+            else if (interceptX !== Infinity && interceptY !== Infinity && interceptZ === Infinity) { vertices.push(new THREE.Vector3(interceptX, 0, -largeVal), new THREE.Vector3(0, interceptY, -largeVal), new THREE.Vector3(0, interceptY, largeVal), new THREE.Vector3(interceptX, 0, largeVal)); }
+            else if (interceptX !== Infinity && interceptZ !== Infinity && interceptY === Infinity) { vertices.push(new THREE.Vector3(interceptX, -largeVal, 0), new THREE.Vector3(0, -largeVal, interceptZ), new THREE.Vector3(0, largeVal, interceptZ), new THREE.Vector3(interceptX, largeVal, 0)); }
+            else if (interceptY !== Infinity && interceptZ !== Infinity && interceptX === Infinity) { vertices.push(new THREE.Vector3(-largeVal, interceptY, 0), new THREE.Vector3(-largeVal, 0, interceptZ), new THREE.Vector3(largeVal, 0, interceptZ), new THREE.Vector3(largeVal, interceptY, 0)); }
+            else if (interceptX !== Infinity && interceptY === Infinity && interceptZ === Infinity) { vertices.push(new THREE.Vector3(interceptX, -largeVal, -largeVal), new THREE.Vector3(interceptX, largeVal, -largeVal), new THREE.Vector3(interceptX, largeVal, largeVal), new THREE.Vector3(interceptX, -largeVal, largeVal)); }
+            else if (interceptY !== Infinity && interceptX === Infinity && interceptZ === Infinity) { vertices.push(new THREE.Vector3(-largeVal, interceptY, -largeVal), new THREE.Vector3(largeVal, interceptY, -largeVal), new THREE.Vector3(largeVal, interceptY, largeVal), new THREE.Vector3(-largeVal, interceptY, largeVal)); }
+            else if (interceptZ !== Infinity && interceptX === Infinity && interceptY === Infinity) { vertices.push(new THREE.Vector3(-largeVal, -largeVal, interceptZ), new THREE.Vector3(largeVal, -largeVal, interceptZ), new THREE.Vector3(largeVal, largeVal, interceptZ), new THREE.Vector3(-largeVal, largeVal, interceptZ)); }
+            if (vertices.length < 3) return;
+            const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
+            geometry.setIndex(vertices.length === 3 ? [0, 1, 2] : [0, 1, 2, 0, 2, 3]); geometry.computeVertexNormals();
+            const material = new THREE.MeshPhongMaterial({ color: 0x6366f1, opacity: 0.6, transparent: true, side: THREE.DoubleSide });
+            const planeMesh = new THREE.Mesh(geometry, material); planeMesh.name = "millerObject"; activeGroup.add(planeMesh);
+        }
+        
+        // --- FIXED visualizeDirection Function ---
+        function visualizeDirection() {
+            // 1. Get and parse inputs for direction indices [uvw]
+            const u = parseMillerInput(document.getElementById('h-index').value);
+            const v = parseMillerInput(document.getElementById('k-index').value);
+            const w = parseMillerInput(document.getElementById('l-index').value);
+
+            // 2. Validate the inputs
+            if (isNaN(u) || isNaN(v) || isNaN(w)) {
+                showMessage('Invalid integer values.', 'error');
+                return;
+            }
+            if (u === 0 && v === 0 && w === 0) {
+                showMessage('Direction indices [u, v, w] cannot all be zero.', 'error');
+                updateVectorInfo('Invalid');
+                return;
+            }
+
+            // 3. Update the information panel
+            showMessage('Direction: [' + u + ' ' + v + ' ' + w + ']', 'info');
+            updateVectorInfo(`[${u}, ${v}, ${w}]`);
+
+            // 4. Define the direction vector based on the established axis mapping:
+            // h -> z-axis, k -> x-axis, l -> y-axis
+            // So, a vector [uvw] corresponds to a 3D vector (v, w, u) in (x, y, z) space.
+            const directionVector = new THREE.Vector3(v, w, u);
+            const length = directionVector.length();
+
+            if (length === 0) return; // Should be redundant, but it's a good safeguard.
+
+            // 5. Create and add the arrow visualization using ArrowHelper.
+            // ArrowHelper requires a normalized direction vector and a length.
+            const normalizedDirection = directionVector.clone().normalize();
+            
+            // Define arrow properties for good visibility
+            const headLength = 0.2 * Math.min(length, 1.5);
+            const headWidth = 0.15 * Math.min(length, 1.5);
+
+            const directionArrow = new THREE.ArrowHelper(
+                normalizedDirection,          // The arrow's direction (must be normalized)
+                new THREE.Vector3(0, 0, 0),   // The arrow's starting point (origin)
+                length,                       // The arrow's length
+                0xea580c,                     // Arrow color (a bright orange)
+                headLength,                   // Length of the arrowhead
+                headWidth                     // Width of the arrowhead
+            );
+            
+            directionArrow.name = "millerObject";
+            activeGroup.add(directionArrow);
+        }
+
+        function updateUIForMode() {
+            const planePanel = document.getElementById('plane-info-panel'); const dirPanel = document.getElementById('direction-info-panel');
+            const hLabel = document.getElementById('h-label'); const kLabel = document.getElementById('k-label'); const lLabel = document.getElementById('l-label');
+            if (currentMode === 'plane') {
+                planePanel.classList.remove('hidden'); dirPanel.classList.add('hidden');
+                hLabel.textContent = 'h Index (Out/In - Blue)'; kLabel.textContent = 'k Index (Right/Left - Red)'; lLabel.textContent = 'l Index (Up/Down - Green)';
+            } else {
+                planePanel.classList.add('hidden'); dirPanel.classList.remove('hidden');
+                hLabel.textContent = 'u Index (Out/In - Blue)'; kLabel.textContent = 'v Index (Right/Left - Red)'; lLabel.textContent = 'w Index (Up/Down - Green)';
+            }
+        }
+        function parseMillerInput(inputStr) { if (typeof inputStr !== 'string') inputStr = String(inputStr); let str = inputStr.trim().toLowerCase(); let isNegative = false; if (str.startsWith('-') || str.includes('¯') || str.includes('bar')) { isNegative = true; } let numStr = str.replace(/[^0-9.]/g, ''); let val = parseInt(numStr, 10); if (isNaN(val)) return NaN; return isNegative ? -val : val; }
+        function createAxisLabel(text, x, y, z) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.textContent = text;
+            container.appendChild(div);
+            const labelObject = new THREE.Object3D();
+            labelObject.position.set(x, y, z);
+            activeGroup.add(labelObject);
+            labels.push({ div: div, object: labelObject });
+        }
+        function updateLabels() {
+            labels.forEach(labelData => {
+                const vector = new THREE.Vector3().setFromMatrixPosition(labelData.object.matrixWorld);
+                vector.project(camera);
+                const x = (vector.x * 0.5 + 0.5) * container.clientWidth;
+                const y = (vector.y * -0.5 + 0.5) * container.clientHeight;
+                labelData.div.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+            });
+        }
+        function formatIntercept(val) { if (val === Infinity) return '∞'; if (val === -Infinity) return '-∞'; return Number(val.toPrecision(3)); }
+        function updateInterceptsInfo(text) { document.getElementById('intercepts-info').textContent = text; }
+        function updateVectorInfo(text) { document.getElementById('vector-info').textContent = text; }
+        
+        function showMessage(text, type) {
+            const box = document.getElementById('message-box');
+            box.textContent = text;
+            if (type === 'error') box.className = 'mt-4 text-sm text-center font-medium p-3 rounded-lg bg-red-100 text-red-700';
+            else if (type === 'warning') box.className = 'mt-4 text-sm text-center font-medium p-3 rounded-lg bg-yellow-100 text-yellow-700';
+            else box.className = 'mt-4 text-sm text-center font-medium p-3 rounded-lg bg-blue-100 text-blue-700';
+        }
+        
+        // --- Initializer ---
+        init();
+
+    </script>
+</body>
+</html>
