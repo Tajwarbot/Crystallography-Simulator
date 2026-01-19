@@ -5,6 +5,8 @@ The Crystallography Simulator is an interactive and educational web-based tool t
 Try it out directly: [Crystallography Simulator Website](https://crystalsim.netlify.app).
 
 ---
+![crystalsimdemo-ezgif com-video-to-gif-converter](https://github.com/user-attachments/assets/0c6a4316-5fb5-44c3-8b7e-6215f833366b)
+
 
 ## Features
 
